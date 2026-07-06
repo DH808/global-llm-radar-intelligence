@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { VENDORS, normalizeCostPerMillion, vendorForText, sourceTier, calcVendorSummaries, buildAlerts } = require('./logic');
+const { buildDatabase } = require('./db');
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.COLLECT_TIMEOUT_MS || 15000);
 
@@ -226,6 +227,14 @@ async function collectState() {
   };
   state.vendorSummaries = calcVendorSummaries(state);
   state.alerts = buildAlerts(state);
+  const db = buildDatabase(state);
+  state.databaseSummary = {
+    schemaVersion: db.schemaVersion,
+    metrics: db.metrics,
+    coverage: db.coverage,
+    tableNames: Object.keys(db.tables),
+    boundary: db.productBoundary
+  };
   return state;
 }
 

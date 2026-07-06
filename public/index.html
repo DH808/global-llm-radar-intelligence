@@ -46,6 +46,12 @@
         <input id="search" placeholder="搜索 vendor / model / source，例如 DeepSeek、Qwen、Claude" />
       </section>
 
+      <section class="panel database-panel" id="database">
+        <div class="card-head"><div><h2>Data Foundation / Coverage Matrix</h2><p>先看底层数据库是否完整：vendor × pricing / usage proxy / adoption proxy / official URL / model catalog / missing layers。</p></div><a class="schema-link" href="/api/schema" target="_blank">schema contract ↗</a></div>
+        <div id="dbMetrics" class="db-metrics"></div>
+        <div id="coverageHeatmap" class="coverage-heatmap"></div>
+      </section>
+
       <section class="chart-grid" id="landscape">
         <article class="chart-card wide">
           <div class="card-head"><div><h2>Price–Adoption Landscape</h2><p>横轴：最低 output price；纵轴：公开 adoption proxy score；气泡：OpenRouter 模型覆盖。</p></div><span class="tag">interactive</span></div>

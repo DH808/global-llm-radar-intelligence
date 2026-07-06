@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 const { collectState, writeState } = require('./src/collector');
+const { buildDatabase } = require('./src/db');
 
 const APP_DIR = __dirname;
 const PUBLIC_DIR = path.join(APP_DIR, 'public');
@@ -75,6 +76,37 @@ function pickStateView(state) {
     usageProxyRecords: (state.usageProxyRecords || []).slice(0, 500)
   };
 }
+function pickDbView(db) {
+  return {
+    schemaVersion: db.schemaVersion,
+    asOf: db.asOf,
+    productBoundary: db.productBoundary,
+    metrics: db.metrics,
+    coverage: db.coverage,
+    tables: {
+      dim_vendor: db.tables.dim_vendor,
+      dim_model: db.tables.dim_model.slice(0, 1000),
+      dim_source: db.tables.dim_source,
+      fact_model_pricing: db.tables.fact_model_pricing.slice(0, 1000),
+      fact_adoption_signal: db.tables.fact_adoption_signal.slice(0, 800),
+      fact_usage_proxy: db.tables.fact_usage_proxy.slice(0, 800),
+      fact_source_snapshot: db.tables.fact_source_snapshot,
+      fact_alert: db.tables.fact_alert.slice(0, 200)
+    },
+    indexes: { modelsByVendor: db.indexes.modelsByVendor }
+  };
+}
+function databaseSchemaContract() {
+  return {
+    schemaVersion: 'global-llm-token-intelligence-db-v1',
+    principle: 'All material facts are source-bound, vintage-aware and labeled as official fact, channel sample, developer/open-source proxy, or estimate.',
+    primaryKeys: {
+      dim_vendor: 'vendorId', dim_model: 'modelId', dim_source: 'sourceId', fact_model_pricing: 'pricingId', fact_adoption_signal: 'adoptionId', fact_usage_proxy: 'usageProxyId', fact_source_snapshot: 'snapshotId', fact_alert: 'alertId'
+    },
+    requiredVintageFields: ['observedAt', 'asOf/effectiveDate', 'sourceId', 'sourceUrl', 'sourceBoundary', 'confidenceScore'],
+    plannedButMissing: ['officialParsedPrice for every vendor', 'financialDisclosure facts', 'appWebTraffic facts', 'enterpriseCustomerEvidence facts', 'historical price-diff fact table']
+  };
+}
 
 async function handleApi(req, res, pathname, url) {
   try {
@@ -86,6 +118,19 @@ async function handleApi(req, res, pathname, url) {
       const force = url.searchParams.get('refresh') === '1';
       const state = await maybeRefresh(force);
       return json(res, 200, pickStateView(state));
+    }
+    if (pathname === '/api/db') {
+      const state = await maybeRefresh(url.searchParams.get('refresh') === '1');
+      const db = buildDatabase(state);
+      return json(res, 200, pickDbView(db));
+    }
+    if (pathname === '/api/coverage') {
+      const state = await maybeRefresh(false);
+      const db = buildDatabase(state);
+      return json(res, 200, { asOf: db.asOf, metrics: db.metrics, coverage: db.coverage, tables: Object.fromEntries(Object.entries(db.tables).map(([k, v]) => [k, v.length])) });
+    }
+    if (pathname === '/api/schema') {
+      return json(res, 200, databaseSchemaContract());
     }
     if (pathname === '/api/export/markdown') {
       const state = await maybeRefresh(false);
