@@ -198,6 +198,8 @@ function buildDatabase(state) {
     pricingFacts: fact_model_pricing.length,
     adoptionFacts: fact_adoption_signal.length,
     usageProxyFacts: fact_usage_proxy.length,
+    officialParsedPriceFacts: fact_model_pricing.filter(x => x.sourceTier <= 1).length,
+    vendorsWithOfficialParsedPrice: new Set(fact_model_pricing.filter(x => x.sourceTier <= 1).map(x => x.vendorId)).size,
     alerts: fact_alert.length,
     avgCoverageScore: avg(db.coverage.vendors.map(x => x.coverageScore))
   };

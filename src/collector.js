@@ -2,12 +2,24 @@ const fs = require('fs');
 const path = require('path');
 const { VENDORS, normalizeCostPerMillion, vendorForText, sourceTier, calcVendorSummaries, buildAlerts } = require('./logic');
 const { buildDatabase } = require('./db');
+const { parseOfficialPricingText } = require('./official_pricing');
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.COLLECT_TIMEOUT_MS || 15000);
+
+function readJsonFile(file, fallback = null) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; }
+}
 
 function nowIso() { return new Date().toISOString(); }
 
 async function fetchJson(url, opts = {}) {
+  const r = await fetchText(url, opts);
+  if (!r.ok) return r;
+  try { return { ...r, data: JSON.parse(r.text) }; }
+  catch (err) { return { ok: false, error: `JSON parse: ${err.message}`, bytes: r.bytes, ms: r.ms }; }
+}
+
+async function fetchText(url, opts = {}) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), opts.timeoutMs || DEFAULT_TIMEOUT_MS);
   const started = Date.now();
@@ -15,7 +27,7 @@ async function fetchJson(url, opts = {}) {
     const res = await fetch(url, { headers: { 'user-agent': 'global-llm-radar-intelligence/0.1', ...(opts.headers || {}) }, signal: controller.signal });
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-    return { ok: true, data: JSON.parse(text), bytes: text.length, ms: Date.now() - started };
+    return { ok: true, text, bytes: text.length, ms: Date.now() - started };
   } catch (err) {
     return { ok: false, error: String(err.message || err), ms: Date.now() - started };
   } finally {
@@ -165,6 +177,21 @@ async function collectNpm(sourceStatuses) {
   return out;
 }
 
+async function collectOfficialPricing(sourceStatuses) {
+  const out = [];
+  const targets = VENDORS.filter(v => v.id === 'deepseek');
+  let ok = 0, fail = 0;
+  for (const vendor of targets) {
+    const r = await fetchText(vendor.sourceUrl, { timeoutMs: 15000, headers: { 'user-agent': 'Mozilla/5.0 global-llm-radar-intelligence/0.1' } });
+    if (!r.ok) { fail++; continue; }
+    const parsed = parseOfficialPricingText({ vendorId: vendor.id, vendorName: vendor.name, sourceUrl: vendor.sourceUrl, text: r.text, observedAt: nowIso() });
+    if (parsed.length) ok++; else fail++;
+    out.push(...parsed);
+  }
+  sourceStatuses.official_price_pages = { ok: ok > 0, okCount: ok, failCount: fail, parsedRecords: out.length, observedAt: nowIso() };
+  return out;
+}
+
 function officialSourcePlaceholders() {
   return VENDORS.map(v => ({
     recordId: `official-url:${v.id}`,
@@ -188,14 +215,25 @@ async function collectState() {
   const generatedAt = nowIso();
   const sourceStatuses = {};
   const sourceRegistry = baseSourceRegistry();
-  const [litellm, openrouter, hf, github, npm] = await Promise.all([
+  let [litellm, openrouter, hf, github, npm, officialPricing] = await Promise.all([
     collectLiteLLM(sourceStatuses),
     collectOpenRouter(sourceStatuses),
     collectHuggingFace(sourceStatuses),
     collectGitHub(sourceStatuses),
-    collectNpm(sourceStatuses)
+    collectNpm(sourceStatuses),
+    collectOfficialPricing(sourceStatuses)
   ]);
-  const pricingRecords = [...litellm, ...openrouter.pricing];
+  const staleState = readJsonFile(path.join(__dirname, '..', 'data', 'latest_state.json'), {});
+  if ((!openrouter.pricing || !openrouter.pricing.length) && staleState.pricingRecords) {
+    openrouter.pricing = staleState.pricingRecords.filter(x => x.sourceId === 'openrouter_models');
+    openrouter.usage = staleState.usageProxyRecords ? staleState.usageProxyRecords.filter(x => x.sourceId === 'openrouter_models') : [];
+    sourceStatuses.openrouter_models = { ...(sourceStatuses.openrouter_models || {}), ok: false, staleFallback: true, fallbackPricingRecords: openrouter.pricing.length, fallbackUsageRecords: openrouter.usage.length, observedAt: nowIso() };
+  }
+  if ((!github || !github.length) && staleState.adoptionSignals) {
+    github = staleState.adoptionSignals.filter(x => x.sourceId === 'github_api');
+    sourceStatuses.github_api = { ...(sourceStatuses.github_api || {}), ok: false, staleFallback: true, fallbackRecords: github.length, observedAt: nowIso() };
+  }
+  const pricingRecords = [...officialPricing, ...litellm, ...openrouter.pricing];
   const usageProxyRecords = [...openrouter.usage, ...officialSourcePlaceholders()];
   const adoptionSignals = [...hf, ...github, ...npm];
   const state = {
