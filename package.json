@@ -1,0 +1,14 @@
+{
+  "name": "global-llm-radar-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source-bound Global LLM vendor pricing, model and demand proxy radar for investment research",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "collect": "node scripts/collect_state.js",
+    "test": "node test/logic.test.js",
+    "check": "node --check server.js && node --check src/logic.js && node --check src/collector.js && node --check scripts/collect_state.js && node --check public/app.js"
+  },
+  "dependencies": {}
+}

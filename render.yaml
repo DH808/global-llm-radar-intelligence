@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: global-llm-radar-intelligence
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run collect
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LIVE_REFRESH_ENABLED
+        value: "true"
+      - key: COLLECT_TIMEOUT_MS
+        value: "15000"

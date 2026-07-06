@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Global LLM Radar Intelligence</title>
+  <link rel="stylesheet" href="/style.css?v=20260706a" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">InvestmentOS Data Product · Public-source v1</div>
+      <h1>Global LLM Radar Intelligence</h1>
+      <p>跟踪中美主要大模型厂商的 API 价格、模型发布、OpenRouter/HF/GitHub/npm 等 demand proxies。所有 token volume / share 均按来源边界标注，不冒充全球真实市占率。</p>
+    </div>
+    <div class="hero-actions">
+      <button id="refreshBtn">刷新数据</button>
+      <a class="button secondary" href="/api/export/markdown">导出 Markdown</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-grid" id="statusGrid"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Executive Signal Board</h2>
+          <p>按公开 proxy score、价格记录覆盖、开发者/开源热度综合排序。</p>
+        </div>
+        <input id="search" placeholder="搜索 vendor / model / source" />
+      </div>
+      <div id="vendorBoard" class="vendor-board"></div>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <h2>Alerts / Watch Items</h2>
+        <div id="alerts" class="alerts"></div>
+      </div>
+      <div class="panel">
+        <h2>Source Registry & Data Boundary</h2>
+        <div id="sources" class="sources"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Model Pricing Comparator</h2>
+      <p class="muted">价格主要来自 LiteLLM 与 OpenRouter 等公开聚合/渠道元数据；正式 IC 使用前需回到官方 pricing docs 核对。</p>
+      <div class="table-wrap">
+        <table id="pricingTable">
+          <thead><tr><th>Vendor</th><th>Model</th><th>Input $/1M</th><th>Output $/1M</th><th>Context</th><th>Source</th><th>Boundary</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Adoption / Demand Proxy Ledger</h2>
+      <p class="muted">HF downloads、GitHub stars、npm downloads、OpenRouter catalog presence 等均是 proxy，不是厂商全平台 token volume。</p>
+      <div class="table-wrap">
+        <table id="adoptionTable">
+          <thead><tr><th>Vendor</th><th>Signal</th><th>Object</th><th>Value</th><th>As-of</th><th>Source boundary</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel warning">
+      <h2>Hard Limitations</h2>
+      <ul id="limitations"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <span id="asOf">loading…</span>
+    <span>Global LLM Radar v1 · source-bound / vintage-aware</span>
+  </footer>
+  <script src="/app.js?v=20260706a"></script>
+</body>
+</html>
