@@ -4,78 +4,91 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Global LLM Radar Intelligence</title>
-  <link rel="stylesheet" href="/style.css?v=20260706a" />
+  <link rel="stylesheet" href="/style.css?v=20260706b" />
 </head>
 <body>
-  <header class="hero">
-    <div>
-      <div class="eyebrow">InvestmentOS Data Product · Public-source v1</div>
-      <h1>Global LLM Radar Intelligence</h1>
-      <p>跟踪中美主要大模型厂商的 API 价格、模型发布、OpenRouter/HF/GitHub/npm 等 demand proxies。所有 token volume / share 均按来源边界标注，不冒充全球真实市占率。</p>
-    </div>
-    <div class="hero-actions">
-      <button id="refreshBtn">刷新数据</button>
-      <a class="button secondary" href="/api/export/markdown">导出 Markdown</a>
-    </div>
-  </header>
+  <div class="app-shell">
+    <aside class="side-rail">
+      <div class="brand-mark">LLM<br/>RADAR</div>
+      <nav>
+        <a href="#command">Command</a>
+        <a href="#landscape">Landscape</a>
+        <a href="#vendors">Vendors</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+      <div class="rail-note">source-bound<br/>not market-share</div>
+    </aside>
 
-  <main>
-    <section class="status-grid" id="statusGrid"></section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>Executive Signal Board</h2>
-          <p>按公开 proxy score、价格记录覆盖、开发者/开源热度综合排序。</p>
+    <main class="workspace">
+      <section class="hero" id="command">
+        <div class="hero-copy">
+          <div class="eyebrow">InvestmentOS · Global LLM Intelligence v1</div>
+          <h1>大模型竞争格局<br/><span>价格 × 采用 proxy × 发布信号</span></h1>
+          <p>从官方价格入口、LiteLLM、OpenRouter、Hugging Face、GitHub、npm 自动生成的可视化雷达。所有 token volume / share 均按渠道样本或 proxy 标注，不冒充全球真实份额。</p>
         </div>
-        <input id="search" placeholder="搜索 vendor / model / source" />
-      </div>
-      <div id="vendorBoard" class="vendor-board"></div>
-    </section>
+        <div class="hero-panel">
+          <div class="freshness"><span id="freshDot"></span><div><b id="asOfShort">loading</b><small>latest snapshot</small></div></div>
+          <div id="healthMini" class="health-mini"></div>
+          <button id="refreshBtn">刷新公开数据</button>
+          <a class="ghost" href="/api/export/markdown">导出 briefing</a>
+        </div>
+      </section>
 
-    <section class="two-col">
-      <div class="panel">
-        <h2>Alerts / Watch Items</h2>
-        <div id="alerts" class="alerts"></div>
-      </div>
-      <div class="panel">
-        <h2>Source Registry & Data Boundary</h2>
-        <div id="sources" class="sources"></div>
-      </div>
-    </section>
+      <section class="metric-strip" id="metrics"></section>
 
-    <section class="panel">
-      <h2>Model Pricing Comparator</h2>
-      <p class="muted">价格主要来自 LiteLLM 与 OpenRouter 等公开聚合/渠道元数据；正式 IC 使用前需回到官方 pricing docs 核对。</p>
-      <div class="table-wrap">
-        <table id="pricingTable">
-          <thead><tr><th>Vendor</th><th>Model</th><th>Input $/1M</th><th>Output $/1M</th><th>Context</th><th>Source</th><th>Boundary</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <section class="control-bar">
+        <div class="segmented" id="regionFilter">
+          <button data-region="all" class="active">Global</button>
+          <button data-region="US">US</button>
+          <button data-region="CN">China</button>
+          <button data-region="EU">EU</button>
+        </div>
+        <input id="search" placeholder="搜索 vendor / model / source，例如 DeepSeek、Qwen、Claude" />
+      </section>
 
-    <section class="panel">
-      <h2>Adoption / Demand Proxy Ledger</h2>
-      <p class="muted">HF downloads、GitHub stars、npm downloads、OpenRouter catalog presence 等均是 proxy，不是厂商全平台 token volume。</p>
-      <div class="table-wrap">
-        <table id="adoptionTable">
-          <thead><tr><th>Vendor</th><th>Signal</th><th>Object</th><th>Value</th><th>As-of</th><th>Source boundary</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <section class="chart-grid" id="landscape">
+        <article class="chart-card wide">
+          <div class="card-head"><div><h2>Price–Adoption Landscape</h2><p>横轴：最低 output price；纵轴：公开 adoption proxy score；气泡：OpenRouter 模型覆盖。</p></div><span class="tag">interactive</span></div>
+          <div id="bubbleChart" class="chart-stage"></div>
+        </article>
+        <article class="chart-card">
+          <div class="card-head"><div><h2>Proxy Leaders</h2><p>HF/GitHub/npm/OpenRouter 组合 proxy。</p></div></div>
+          <div id="barChart" class="chart-stage compact"></div>
+        </article>
+        <article class="chart-card">
+          <div class="card-head"><div><h2>Region Mix</h2><p>当前覆盖 vendor 区域分布。</p></div></div>
+          <div id="donutChart" class="donut-wrap"></div>
+        </article>
+        <article class="chart-card wide">
+          <div class="card-head"><div><h2>Pricing Frontier</h2><p>输入价 vs 输出价，快速识别低价前沿与高价 frontier。</p></div><span class="tag">click points</span></div>
+          <div id="priceScatter" class="chart-stage"></div>
+        </article>
+      </section>
 
-    <section class="panel warning">
-      <h2>Hard Limitations</h2>
-      <ul id="limitations"></ul>
-    </section>
-  </main>
+      <section class="insight-grid">
+        <article class="panel"><h2>Watch Items</h2><div id="alerts" class="alert-stack"></div></article>
+        <article class="panel"><h2>Selected Vendor</h2><div id="vendorDetail" class="vendor-detail"></div></article>
+      </section>
 
-  <footer>
-    <span id="asOf">loading…</span>
-    <span>Global LLM Radar v1 · source-bound / vintage-aware</span>
-  </footer>
-  <script src="/app.js?v=20260706a"></script>
+      <section class="panel" id="vendors">
+        <div class="card-head"><div><h2>Vendor Radar Cards</h2><p>点击任一 vendor，右侧 detail 与图表高亮会同步更新。</p></div></div>
+        <div id="vendorCards" class="vendor-cards"></div>
+      </section>
+
+      <section class="panel" id="evidence">
+        <div class="card-head"><div><h2>Evidence & Source Boundary</h2><p>把官方、渠道样本、开发者 proxy、开源 proxy 分层展示，避免把 proxy 当真实 token share。</p></div></div>
+        <div id="sourceTiles" class="source-tiles"></div>
+      </section>
+
+      <section class="panel collapsible">
+        <details>
+          <summary>展开底层 pricing / adoption ledger</summary>
+          <div class="ledger-tabs"><button class="active" data-table="pricing">Pricing</button><button data-table="adoption">Adoption proxies</button></div>
+          <div class="table-wrap"><table id="ledgerTable"><thead></thead><tbody></tbody></table></div>
+        </details>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js?v=20260706b"></script>
 </body>
 </html>

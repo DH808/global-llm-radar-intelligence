@@ -1,65 +1,36 @@
-let STATE = null;
-const $ = sel => document.querySelector(sel);
-const fmt = n => Number.isFinite(Number(n)) ? Number(n).toLocaleString(undefined,{maximumFractionDigits:3}) : 'n/a';
-const money = n => Number.isFinite(Number(n)) ? '$' + Number(n).toLocaleString(undefined,{maximumFractionDigits:3}) : 'n/a';
+let STATE=null;let FILTER={region:'all',q:'',selected:null,table:'pricing'};
+const $=s=>document.querySelector(s);const $$=s=>Array.from(document.querySelectorAll(s));
+const fmt=n=>Number.isFinite(Number(n))?Number(n).toLocaleString(undefined,{maximumFractionDigits:2}):'n/a';
+const money=n=>Number.isFinite(Number(n))?'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:3}):'n/a';
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const colors={US:'#1863dc',CN:'#10a66a',EU:'#6c4df6',Other:'#f59e0b'};
 
 async function load(refresh=false){
-  $('#refreshBtn').textContent = refresh ? '刷新中…' : '刷新数据';
-  const res = await fetch('/api/state' + (refresh ? '?refresh=1' : ''));
-  if(!res.ok) throw new Error('state HTTP '+res.status);
-  STATE = await res.json();
-  render();
-  $('#refreshBtn').textContent = '刷新数据';
+  $('#refreshBtn').textContent=refresh?'刷新中…':'刷新公开数据';
+  const r=await fetch('/api/state'+(refresh?'?refresh=1':'')); if(!r.ok) throw new Error('state HTTP '+r.status);
+  STATE=await r.json(); FILTER.selected=FILTER.selected||((STATE.vendorSummaries||[])[0]||{}).vendorId; render(); $('#refreshBtn').textContent='刷新公开数据';
 }
-
-function render(){
-  const m = STATE.metrics || {};
-  $('#asOf').textContent = `As-of ${STATE.asOf || STATE.generatedAt || ''}`;
-  $('#statusGrid').innerHTML = [
-    ['Vendors', m.vendorCount], ['Pricing records', m.pricingRecordCount], ['Usage proxies', m.usageProxyRecordCount], ['Adoption signals', m.adoptionSignalCount], ['Sources OK', m.sourceOkCount], ['Sources failed', m.sourceFailCount]
-  ].map(([k,v])=>`<div class="stat"><div class="label">${esc(k)}</div><div class="value">${fmt(v)}</div></div>`).join('');
-  renderVendors(); renderAlerts(); renderSources(); renderPricing(); renderAdoption(); renderLimitations();
-}
-function renderVendors(){
-  const q = ($('#search').value || '').toLowerCase();
-  const rows = (STATE.vendorSummaries||[]).filter(v => !q || JSON.stringify(v).toLowerCase().includes(q));
-  const maxScore = Math.max(1, ...rows.map(v=>v.proxyScore||0));
-  $('#vendorBoard').innerHTML = rows.map(v=>`<article class="vendor-card">
-    <h3>${esc(v.name)}</h3>
-    <div class="chips"><span class="chip">${esc(v.region)}</span><span class="chip">${esc(v.tier)}</span><span class="chip">proxy score ${fmt(v.proxyScore)}</span></div>
-    <div class="bar"><i style="width:${Math.min(100, (v.proxyScore||0)/maxScore*100)}%"></i></div>
-    <div class="metrics">
-      <div class="metric"><b>${money(v.minInputUsdPer1M)}</b><span>min input / 1M</span></div>
-      <div class="metric"><b>${money(v.minOutputUsdPer1M)}</b><span>min output / 1M</span></div>
-      <div class="metric"><b>${fmt(v.hfDownloads)}</b><span>HF downloads</span></div>
-      <div class="metric"><b>${fmt(v.githubStars + v.npmDownloadsLastMonth)}</b><span>GitHub + npm proxy</span></div>
-    </div>
-    <p class="muted">${esc(v.sourceBoundary)}</p>
-    <a href="${esc(v.officialPricingUrl)}" target="_blank" rel="noreferrer">official source ↗</a>
-  </article>`).join('');
-}
-function renderAlerts(){
-  $('#alerts').innerHTML = (STATE.alerts||[]).slice(0,40).map(a=>`<div class="alert ${esc(a.severity||'')}"><b>${esc(a.title)}</b><div>${esc(a.detail||'')}</div><div class="small">${esc(a.sourceBoundary||'')}</div></div>`).join('') || '<p class="muted">No alerts.</p>';
-}
-function renderSources(){
-  const statuses = STATE.sourceStatuses || {};
-  $('#sources').innerHTML = (STATE.sourceRegistry||[]).map(s=>{ const st=statuses[s.sourceId]||{}; return `<div class="source"><div><span class="tier">Tier ${s.tier}</span> · <b>${esc(s.sourceName)}</b> · ${st.ok?'OK':'check'}</div><div class="muted">${esc(s.boundary)}</div><a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.url)}</a></div>` }).join('');
-}
-function renderPricing(){
-  const q = ($('#search').value || '').toLowerCase();
-  const rows = (STATE.pricingRecords||[]).filter(p => (!q || JSON.stringify(p).toLowerCase().includes(q)) && ((Number(p.inputUsdPer1M)>=0.001) || (Number(p.outputUsdPer1M)>=0.001))).sort((a,b)=>((a.outputUsdPer1M&&a.outputUsdPer1M>=0.001)?a.outputUsdPer1M:9999)-((b.outputUsdPer1M&&b.outputUsdPer1M>=0.001)?b.outputUsdPer1M:9999)).slice(0,220);
-  $('#pricingTable tbody').innerHTML = rows.map(p=>`<tr><td>${esc(p.vendorName)}</td><td>${esc(p.modelName)}<div class="small">${esc(p.modality||'')}</div></td><td>${money(p.inputUsdPer1M)}</td><td>${money(p.outputUsdPer1M)}</td><td>${fmt(p.contextWindowTokens)}</td><td><a href="${esc(p.sourceUrl)}" target="_blank" rel="noreferrer">${esc(p.sourceName)}</a><div class="small">Tier ${p.sourceTier}</div></td><td>${esc(p.sourceBoundary)}</td></tr>`).join('');
-}
-function renderAdoption(){
-  const q = ($('#search').value || '').toLowerCase();
-  const rows = [...(STATE.adoptionSignals||[]), ...(STATE.usageProxyRecords||[])].filter(x => !q || JSON.stringify(x).toLowerCase().includes(q)).sort((a,b)=>(b.value||0)-(a.value||0)).slice(0,260);
-  $('#adoptionTable tbody').innerHTML = rows.map(x=>`<tr><td>${esc(x.vendorName)}</td><td>${esc(x.metric)}</td><td><a href="${esc(x.sourceUrl||'#')}" target="_blank" rel="noreferrer">${esc(x.modelName||x.coverageScope||'source')}</a></td><td>${fmt(x.value)}</td><td>${esc(x.asOf||x.observedAt||'')}</td><td>${esc(x.sourceBoundary)}</td></tr>`).join('');
-}
-function renderLimitations(){
-  $('#limitations').innerHTML = (STATE.limitations||[]).map(x=>`<li>${esc(x)}</li>`).join('');
-}
-function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function visibleVendors(){let rows=STATE.vendorSummaries||[]; if(FILTER.region!=='all') rows=rows.filter(x=>x.region===FILTER.region); if(FILTER.q) rows=rows.filter(x=>JSON.stringify(x).toLowerCase().includes(FILTER.q)); return rows;}
+function vendorById(id){return (STATE.vendorSummaries||[]).find(x=>x.vendorId===id)||null;}
+function render(){renderMetrics();renderCharts();renderAlerts();renderVendorDetail();renderVendorCards();renderSources();renderLedger();}
+function renderMetrics(){const m=STATE.metrics||{}; $('#asOfShort').textContent=new Date(STATE.asOf||STATE.generatedAt||Date.now()).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); $('#healthMini').innerHTML=`<div><b>${fmt(m.sourceOkCount)}</b><small>live connectors</small></div><div><b>${fmt(m.sourceFailCount)}</b><small>failed sources</small></div><div><b>${fmt((STATE.alerts||[]).length)}</b><small>watch items</small></div><div><b>${fmt(m.pricingRecordCount)}</b><small>price rows</small></div>`; $('#metrics').innerHTML=[['Vendors',m.vendorCount,'tracked universe'],['Pricing',m.pricingRecordCount,'normalized records'],['Usage proxy',m.usageProxyRecordCount,'channel samples'],['Adoption',m.adoptionSignalCount,'developer/open-source'],['Sources OK',m.sourceOkCount,'live connectors'],['Alerts',(STATE.alerts||[]).length,'rule-based watch']].map(x=>`<div class="metric"><label>${esc(x[0])}</label><b>${fmt(x[1])}</b><small>${esc(x[2])}</small></div>`).join('');}
+function renderCharts(){renderBubble();renderBars();renderDonut();renderPriceScatter();}
+function scale(v,min,max,a,b){if(max===min)return(a+b)/2;return a+(v-min)/(max-min)*(b-a)}
+function logPrice(x){return Math.log10(Math.max(.01,Number(x)||.01));}
+function renderBubble(){const rows=visibleVendors().filter(x=>Number.isFinite(Number(x.minOutputUsdPer1M))&&Number.isFinite(Number(x.proxyScore))); const W=760,H=300,p=44; const xs=rows.map(x=>logPrice(x.minOutputUsdPer1M)); const ys=rows.map(x=>Number(x.proxyScore)||0); const minX=Math.min(...xs,-2),maxX=Math.max(...xs,1.2),minY=0,maxY=Math.max(...ys,100); let svg=`<svg class="svg-chart" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="bubbleGrad" x1="0" x2="1"><stop stop-color="#1863dc"/><stop offset="1" stop-color="#10a66a"/></linearGradient></defs><line class="axis" x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}"/><line class="axis" x1="${p}" y1="${p}" x2="${p}" y2="${H-p}"/><text class="axis-label" x="${W/2-60}" y="${H-8}">lower output price → higher price / 1M tokens</text><text class="axis-label" x="8" y="22">proxy score</text>`; rows.forEach((v,i)=>{const x=scale(logPrice(v.minOutputUsdPer1M),minX,maxX,p,W-p), y=scale(v.proxyScore,minY,maxY,H-p,p), r=Math.max(7,Math.min(25,7+(v.openRouterModelCount||0)/5)); svg+=`<circle class="bubble ${FILTER.selected===v.vendorId?'selected':''}" data-vendor="${v.vendorId}" cx="${x}" cy="${y}" r="${r}" fill="${colors[v.region]||colors.Other}" fill-opacity=".78"><title>${esc(v.name)} output ${money(v.minOutputUsdPer1M)} proxy ${v.proxyScore}</title></circle><text class="chart-label" x="${x+r+3}" y="${y+4}">${esc(shortName(v.name))}</text>`}); svg+='</svg>'; $('#bubbleChart').innerHTML=svg; bindChartClicks('#bubbleChart');}
+function renderBars(){const rows=visibleVendors().slice(0,12); const W=480,H=300,p=18,rowH=22,max=Math.max(1,...rows.map(x=>x.proxyScore||0)); let svg=`<svg class="svg-chart" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="barGrad" x1="0" x2="1"><stop stop-color="#1863dc"/><stop offset="1" stop-color="#6c4df6"/></linearGradient></defs>`; rows.forEach((v,i)=>{const y=p+i*23,w=scale(v.proxyScore,0,max,0,W-165); svg+=`<g class="bar-row" data-vendor="${v.vendorId}"><text class="axis-label" x="0" y="${y+14}">${esc(shortName(v.name,18))}</text><rect class="bar-bg" x="128" y="${y}" width="${W-165}" height="14" rx="7"/><rect class="bar-fill" x="128" y="${y}" width="${w}" height="14" rx="7"/><text class="axis-label" x="${W-32}" y="${y+12}">${v.proxyScore}</text></g>`}); svg+='</svg>'; $('#barChart').innerHTML=svg; bindChartClicks('#barChart');}
+function renderDonut(){const rows=STATE.vendorSummaries||[]; const counts=rows.reduce((a,x)=>(a[x.region]=(a[x.region]||0)+1,a),{}); const total=rows.length||1; let angle=0,parts=[]; ['US','CN','EU','Other'].forEach(k=>{const c=counts[k]||0; if(!c)return; const deg=c/total*360; parts.push(`${colors[k]} ${angle}deg ${angle+deg}deg`); angle+=deg;}); $('#donutChart').innerHTML=`<div class="donut" style="background:conic-gradient(${parts.join(',')})"></div><div class="legend">${Object.entries(counts).map(([k,v])=>`<div><span class="swatch" style="background:${colors[k]||colors.Other}"></span>${k}: <b>${v}</b></div>`).join('')}</div>`;}
+function renderPriceScatter(){const rows=(STATE.pricingRecords||[]).filter(p=>Number(p.inputUsdPer1M)>=.001&&Number(p.outputUsdPer1M)>=.001&&(!FILTER.q||JSON.stringify(p).toLowerCase().includes(FILTER.q))).slice(0,260); const W=760,H=300,pad=44; const xs=rows.map(x=>logPrice(x.inputUsdPer1M)),ys=rows.map(x=>logPrice(x.outputUsdPer1M)); const minX=Math.min(...xs,-2),maxX=Math.max(...xs,1.2),minY=Math.min(...ys,-2),maxY=Math.max(...ys,1.5); let svg=`<svg class="svg-chart" viewBox="0 0 ${W} ${H}"><line class="axis" x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}"/><line class="axis" x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}"/><text class="axis-label" x="${W/2-40}" y="${H-8}">input price log scale</text><text class="axis-label" x="8" y="22">output price</text>`; rows.forEach(r=>{const v=vendorById(r.vendorId)||{}; const x=scale(logPrice(r.inputUsdPer1M),minX,maxX,pad,W-pad), y=scale(logPrice(r.outputUsdPer1M),minY,maxY,H-pad,pad); svg+=`<circle class="bubble ${FILTER.selected===r.vendorId?'selected':''}" data-vendor="${r.vendorId}" cx="${x}" cy="${y}" r="5" fill="${colors[v.region]||colors.Other}" fill-opacity=".55"><title>${esc(r.vendorName)} ${esc(r.modelName)} input ${money(r.inputUsdPer1M)} output ${money(r.outputUsdPer1M)}</title></circle>`}); svg+='</svg>'; $('#priceScatter').innerHTML=svg; bindChartClicks('#priceScatter');}
+function bindChartClicks(sel){$$(sel+' [data-vendor]').forEach(el=>el.addEventListener('click',()=>{FILTER.selected=el.dataset.vendor;render();document.getElementById('vendors').scrollIntoView({behavior:'smooth',block:'start'});}));}
+function renderAlerts(){const rows=(STATE.alerts||[]).filter(a=>!FILTER.selected||a.vendorId===FILTER.selected).slice(0,12); $('#alerts').innerHTML=rows.map(a=>`<div class="alert ${esc(a.severity)}"><b>${esc(a.title)}</b><div>${esc(a.detail||'')}</div><div class="small">${esc(a.sourceBoundary||'')}</div></div>`).join('')||'<p class="small">当前选中 vendor 暂无 alert，切换 Global 查看全部。</p>';}
+function renderVendorDetail(){const v=vendorById(FILTER.selected)||visibleVendors()[0]; if(!v){$('#vendorDetail').innerHTML='<p class="small">No vendor selected.</p>';return;} FILTER.selected=v.vendorId; const prices=(STATE.pricingRecords||[]).filter(x=>x.vendorId===v.vendorId&&Number(x.outputUsdPer1M)>=.001).sort((a,b)=>(a.outputUsdPer1M||999)-(b.outputUsdPer1M||999)).slice(0,6); const adoption=(STATE.adoptionSignals||[]).filter(x=>x.vendorId===v.vendorId).sort((a,b)=>(b.value||0)-(a.value||0)).slice(0,5); $('#vendorDetail').innerHTML=`<div class="chips"><span class="chip">${esc(v.region)}</span><span class="chip">${esc(v.tier)}</span><span class="chip">proxy ${v.proxyScore}</span></div><h2>${esc(v.name)}</h2><div class="detail-hero"><div class="detail-box"><small>Min input / output</small><b>${money(v.minInputUsdPer1M)} / ${money(v.minOutputUsdPer1M)}</b></div><div class="detail-box"><small>HF / GitHub+npm</small><b>${fmt(v.hfDownloads)} / ${fmt(v.githubStars+v.npmDownloadsLastMonth)}</b></div></div><h3>Cheapest observed models</h3>${prices.map(p=>`<div class="alert info"><b>${esc(p.modelName)}</b><div>${money(p.inputUsdPer1M)} input · ${money(p.outputUsdPer1M)} output · ctx ${fmt(p.contextWindowTokens)}</div><div class="small">${esc(p.sourceBoundary)}</div></div>`).join('')||'<p class="small">No normalized public price records.</p>'}<h3>Top adoption proxies</h3>${adoption.map(a=>`<div class="alert"><b>${esc(a.metric)} · ${fmt(a.value)}</b><div>${esc(a.modelName)}</div><div class="small">${esc(a.sourceBoundary)}</div></div>`).join('')||'<p class="small">No adoption proxy records.</p>'}<a href="${esc(v.officialPricingUrl)}" target="_blank" rel="noreferrer">Official verification source ↗</a>`;}
+function renderVendorCards(){const rows=visibleVendors(); $('#vendorCards').innerHTML=rows.map(v=>`<article class="vendor-card ${FILTER.selected===v.vendorId?'selected':''}" data-vendor="${v.vendorId}"><h3>${esc(v.name)}</h3><div class="chips"><span class="chip">${v.region}</span><span class="chip">${v.proxyScore}</span></div><div class="mini-grid"><div class="mini"><b>${money(v.minInputUsdPer1M)}</b><small>input / 1M</small></div><div class="mini"><b>${money(v.minOutputUsdPer1M)}</b><small>output / 1M</small></div><div class="mini"><b>${fmt(v.openRouterModelCount)}</b><small>OpenRouter</small></div><div class="mini"><b>${fmt(v.hfDownloads)}</b><small>HF</small></div></div></article>`).join(''); $$('#vendorCards [data-vendor]').forEach(el=>el.addEventListener('click',()=>{FILTER.selected=el.dataset.vendor;render();}));}
+function renderSources(){const st=STATE.sourceStatuses||{}; $('#sourceTiles').innerHTML=(STATE.sourceRegistry||[]).map(s=>{const ok=st[s.sourceId]&&st[s.sourceId].ok; return `<div class="source-tile"><span class="chip">Tier ${s.tier}</span><b>${esc(s.sourceName)}</b><div class="small">${ok?'✅ live':'⚠️ check'} · ${esc(s.boundary)}</div><a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.url)}</a></div>`}).join('');}
+function renderLedger(){const isP=FILTER.table==='pricing'; const head=isP?['Vendor','Model','Input','Output','Context','Source','Boundary']:['Vendor','Metric','Object','Value','As-of','Boundary']; $('#ledgerTable thead').innerHTML='<tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>'; const rows=isP?(STATE.pricingRecords||[]).filter(x=>Number(x.inputUsdPer1M)>=.001||Number(x.outputUsdPer1M)>=.001).slice(0,350):[...(STATE.adoptionSignals||[]),...(STATE.usageProxyRecords||[])].sort((a,b)=>(b.value||0)-(a.value||0)).slice(0,350); $('#ledgerTable tbody').innerHTML=isP?rows.map(p=>`<tr><td>${esc(p.vendorName)}</td><td>${esc(p.modelName)}</td><td>${money(p.inputUsdPer1M)}</td><td>${money(p.outputUsdPer1M)}</td><td>${fmt(p.contextWindowTokens)}</td><td>${esc(p.sourceName)}</td><td>${esc(p.sourceBoundary)}</td></tr>`).join(''):rows.map(a=>`<tr><td>${esc(a.vendorName)}</td><td>${esc(a.metric)}</td><td>${esc(a.modelName||a.coverageScope)}</td><td>${fmt(a.value)}</td><td>${esc(a.asOf||a.observedAt||'')}</td><td>${esc(a.sourceBoundary)}</td></tr>`).join('');}
+function shortName(s,n=14){return String(s).replace('Alibaba Qwen / Tongyi','Qwen').replace('Google Gemini','Gemini').replace('Meta Llama','Llama').replace('ByteDance Doubao / Volcengine','Doubao').slice(0,n)}
 
 $('#refreshBtn').addEventListener('click',()=>load(true).catch(e=>alert(e.message)));
-$('#search').addEventListener('input',()=>render());
-load(false).catch(err=>{ document.body.insertAdjacentHTML('afterbegin', `<pre>${esc(err.message)}</pre>`); });
+$('#search').addEventListener('input',e=>{FILTER.q=e.target.value.toLowerCase();render();});
+$('#regionFilter').addEventListener('click',e=>{if(e.target.dataset.region){FILTER.region=e.target.dataset.region; $$('#regionFilter button').forEach(b=>b.classList.toggle('active',b.dataset.region===FILTER.region)); render();}});
+document.addEventListener('click',e=>{if(e.target.dataset.table){FILTER.table=e.target.dataset.table; $$('.ledger-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.table===FILTER.table)); renderLedger();}});
+load(false).catch(err=>{document.body.innerHTML='<pre style="padding:24px">'+esc(err.stack||err.message)+'</pre>';});
